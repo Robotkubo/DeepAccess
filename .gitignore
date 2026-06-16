@@ -1,0 +1,31 @@
+.sbox/* 
+*.generated.* 
+*._c 
+*.shader_c 
+*.los 
+*.vpk 
+*.vmap 
+ 
+# Build folders 
+**/obj/ 
+**/bin/ 
+**/Debug/ 
+**/Release/ 
+ 
+# IDE / Editor files 
+.vs/ 
+.vscode/ 
+.idea/ 
+*.user 
+launchSettings.json 
+ 
+# Game temporary files 
+game/.source2 
+game/bin/ 
+game/logs/ 
+game/screenshots/ 
+ 
+# Other junk 
+*.pdb 
+.DS_Store 
+Thumbs.db 

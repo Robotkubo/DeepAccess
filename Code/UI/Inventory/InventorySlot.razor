@@ -1,0 +1,148 @@
+﻿@using Sandbox;
+@using Sandbox.UI;
+@namespace Sandbox
+@inherits Panel
+
+<root>
+    @if ( !Input.UsingController )
+    {
+        <label class="index">@(Index + 1)</label>
+    }
+
+    @{
+        var weapon = GetWeapon();
+    }
+
+    @if (weapon.IsValid())
+    {
+        <div class="icon" @ref="IconPanel"></div>
+        <div class="name">@weapon.DisplayName</div>
+    }
+</root>
+
+@code
+{
+    public PlayerInventory Inventory { get; set; }
+    public bool Active { get; set; }
+    public bool Hovered { get; set; }
+
+    public int Index { get; set; }
+
+    Panel IconPanel { get; set; }
+
+    static InventorySlot _hoveredDragSlot;
+
+    public override bool WantsDrag => true;
+
+    protected override void OnDragStart( DragEvent e )
+    {
+        var weapon = GetWeapon();
+        if ( !weapon.IsValid() ) return;
+
+        var icon = weapon.InventoryIconOverride ?? weapon.DisplayIcon?.ResourcePath;
+
+        DragHandler.StartDragging( new DragData
+        {
+            Source = this,
+            Icon = icon,
+            Title = weapon.DisplayName
+        } );
+    }
+
+    protected override void OnDragEnd( DragEvent e )
+    {
+        var data = DragHandler.Current;
+        DragHandler.StopDragging();
+        base.OnDragEnd( e );
+
+        if ( data?.Handled == true )
+        {
+            if ( data.Source is not null ) data.Source.UserData = null;
+            return;
+        }
+
+        if ( _hoveredDragSlot is not null && _hoveredDragSlot != this )
+            return;
+
+        if ( data?.Source is not null ) data.Source.UserData = null;
+
+        var mousePos = Mouse.Position * ScaleFromScreen;
+        if ( Box.RectOuter.IsInside( mousePos ) ) return;
+
+        var weapon = GetWeapon();
+        if ( !Inventory.Drop( weapon ) && weapon.IsValid() )
+            Inventory.Remove( weapon );
+    }
+
+    BaseCarryable GetWeapon()
+    {
+        if (!Inventory.IsValid()) return null;
+        return Inventory.GetSlot(Index);
+    }
+
+    public override void Tick()
+    {
+        base.Tick();
+
+        var weapon = GetWeapon();
+        var hasWeapon = weapon.IsValid();
+
+        SetClass("active", Hovered || Active);
+        SetClass("empty", !hasWeapon);
+        SetClass("selected", Active && hasWeapon);
+        SetClass("hovered", Hovered && hasWeapon);
+        SetClass("switchable", hasWeapon && weapon.CanSwitch());
+
+        // Removed SpawnerWeapon tint
+        // SetClass("no-tint", hasWeapon && weapon is SpawnerWeapon);
+
+        if (hasWeapon && IconPanel is not null)
+        {
+            var iconOverride = weapon.InventoryIconOverride;
+            if (!string.IsNullOrEmpty(iconOverride))
+            {
+                IconPanel.Style.SetBackgroundImage(iconOverride);
+            }
+            else
+            {
+                IconPanel.Style.SetBackgroundImage(weapon.DisplayIcon);
+            }
+        }
+    }
+
+    protected override void OnDragEnter(PanelEvent e)
+    {
+        AddClass("drag-hover");
+        _hoveredDragSlot = this;
+    }
+
+    protected override void OnDragLeave(PanelEvent e)
+    {
+        RemoveClass("drag-hover");
+        if ( _hoveredDragSlot == this ) _hoveredDragSlot = null;
+    }
+
+    protected override void OnDrop( PanelEvent e )
+    {
+        RemoveClass( "drag-hover" );
+        _hoveredDragSlot = null;
+
+        var data = DragHandler.Current ?? e.Target.UserData as DragData;
+        if ( data?.Source is not null ) data.Source.UserData = null;
+
+        if ( data is null ) return;
+
+        // Hotbar-to-hotbar swap
+        if ( data.Source is InventorySlot sourceSlot && sourceSlot.Inventory == Inventory )
+        {
+            data.Handled = true;
+            Inventory.MoveSlot( sourceSlot.Index, Index );
+            return;
+        }
+
+        // Removed SpawnerWeapon drop support
+        // GameManager.GiveSpawnerWeaponAt(...) removed
+    }
+
+    protected override int BuildHash() => HashCode.Combine(GetWeapon(), Hovered, Active, Input.UsingController);
+}
